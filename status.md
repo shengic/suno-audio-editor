@@ -69,7 +69,7 @@ Eight single-responsibility modules. See [CLAUDE.md](CLAUDE.md) for the full bre
 
 | File | Role |
 |---|---|
-| `main.py` | Entry point; picks `TkinterDnD.Tk` or falls back to `tk.Tk`; geometry `820x540` (grows to 640 when lyrics panel is shown) |
+| `main.py` | Entry point; picks `TkinterDnD.Tk` or falls back to `tk.Tk`; fixed geometry `820x540` (never auto-grows) |
 | `app.py` | Composition root, UI, event wiring, poll loop, DND dispatch (audio vs lyrics by extension) |
 | `suno_parser.py` | Pure URL/UUID → audio_url + title resolver |
 | `audio_loader.py` | `AudioClip` dataclass; decode via pydub/ffmpeg; extract cover art (mutagen + Suno og:image scrape) |

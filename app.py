@@ -34,7 +34,6 @@ SLIDER_LENGTH = 220
 ARTWORK_SIZE = 96
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac"}
 LYRIC_EXTS = {".srt", ".lrc"}
-LYRICS_MIN_HEIGHT = 720  # window height needed when lyrics panel is showing (12 rows)
 
 
 class App:
@@ -523,13 +522,10 @@ class App:
     # ---------- lyrics ----------
 
     def _show_lyrics_panel(self):
+        # Window size is fixed at whatever the user has it — never auto-
+        # resize on lyrics load. If the lyrics panel doesn't fit,
+        # the user can resize the window manually.
         self.lyrics_panel.grid()
-        # Grow the window if it's currently too short to show the panel
-        # without clipping the transport row. Never shrink an already-
-        # larger window (respect user resize).
-        self.root.update_idletasks()
-        if self.root.winfo_height() < LYRICS_MIN_HEIGHT:
-            self.root.geometry(f"{self.root.winfo_width()}x{LYRICS_MIN_HEIGHT}")
 
     def _hide_lyrics_panel(self):
         self.lyrics_panel.grid_remove()
