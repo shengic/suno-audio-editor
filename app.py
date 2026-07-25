@@ -34,7 +34,7 @@ SLIDER_LENGTH = 220
 ARTWORK_SIZE = 96
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac"}
 LYRIC_EXTS = {".srt", ".lrc"}
-BG_COLOR = "#E9D5FF"  # light purple for the app chrome (non-content areas)
+BG_COLOR = "#F3E8FF"  # light purple for the app chrome (non-content areas)
 
 
 class App:
