@@ -8,7 +8,7 @@ Fade in/out was removed from the export pipeline per project owner
 request; there are no fade tests here.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import numpy as np
 import pytest

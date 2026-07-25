@@ -4,7 +4,7 @@ Ported from the original web app's src/utils/sunoParser.js — same four
 match patterns, same precedence order, same title format.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import re
 from typing import TypedDict

@@ -1,6 +1,6 @@
 # Suno Audio Editor
 
-**Version 2.0** · Python 3.13 · Tkinter · Windows
+**Version 2.1** · Python 3.13 · Tkinter · Windows
 
 A desktop app for trimming Suno-generated songs. Load a Suno share link or a local audio file, drag a region on the waveform, preview it, and export it as an MP3.
 

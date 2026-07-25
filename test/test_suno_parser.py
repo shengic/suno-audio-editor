@@ -5,7 +5,7 @@ URL / bare UUID) and the error path against the original web app's
 behavior. Pure function, no fixtures needed.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 from suno_parser import parse_suno_url
 

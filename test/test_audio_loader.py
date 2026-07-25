@@ -7,7 +7,7 @@ non-wav formats). load_audio's dispatch is covered by feeding it a
 real file path vs a URL-shaped string.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import io
 

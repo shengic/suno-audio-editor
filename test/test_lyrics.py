@@ -4,7 +4,7 @@ Both parsers are pure — no I/O — so we feed strings directly.
 load_lyrics_file's dispatch is covered with tmp_path.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import pytest
 

@@ -1,6 +1,6 @@
 # Suno Audio Editor — Status
 
-**Version 2.0** · Python 3.13 · Tkinter desktop app · Windows
+**Version 2.1** · Python 3.13 · Tkinter desktop app · Windows
 
 Desktop port of the "Suno Audio Trimmer & Editor" web app. Load a Suno share link / CDN URL / local mp3, drag a region on the waveform, preview or export it as mp3/wav.
 
@@ -18,7 +18,7 @@ pytest              # 84 tests
 pytest -m network   # +1 opt-in network integration test
 ```
 
-## What v2.0 does
+## What v2.1 does
 
 ### Import
 - Paste a Suno share link (`suno.com/song/{uuid}`), a raw CDN mp3 URL (`cdn1.suno.ai/{uuid}.mp3`), a generic https audio URL, or a bare UUID.

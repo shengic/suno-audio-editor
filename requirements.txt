@@ -1,4 +1,4 @@
-# Suno Audio Editor v2.0 — runtime dependencies
+# Suno Audio Editor v2.1 — runtime dependencies
 numpy
 pydub
 audioop-lts; python_version >= "3.13"

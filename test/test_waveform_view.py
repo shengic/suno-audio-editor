@@ -5,7 +5,7 @@ pure geometry (no canvas rendering) are tested with a real Frame
 instance under a hidden Tk root — no mainloop, no visible window.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import pytest
 

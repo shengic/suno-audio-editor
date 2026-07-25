@@ -11,7 +11,7 @@ non-main thread — polling from the main loop sidesteps that entirely
 and is simple enough for this app's needs (no extra queue/dispatcher).
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import threading
 

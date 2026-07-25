@@ -11,7 +11,7 @@ branch (song_id == "external"); for a Suno CDN URL, it hits the cdn1
 branch.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import os
 

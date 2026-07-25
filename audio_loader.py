@@ -11,7 +11,7 @@ failure (missing tag, network hiccup, HTML shape change) just yields
 `artwork=None` — the UI treats it as optional.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import html
 import io

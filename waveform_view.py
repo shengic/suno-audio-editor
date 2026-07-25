@@ -10,7 +10,7 @@ every UI tick during playback, only repositions the single playhead
 line via canvas.coords() rather than clearing and redrawing everything.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import tkinter as tk
 

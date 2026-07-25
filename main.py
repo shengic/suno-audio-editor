@@ -1,6 +1,6 @@
 """Entry point for the Suno audio editor desktop app."""
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 try:
     from tkinterdnd2 import TkinterDnD

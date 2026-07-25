@@ -8,7 +8,7 @@ CLAUDE.md's "Commands" section calls out for testing playback logic
 without sound hardware.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import numpy as np
 import pytest

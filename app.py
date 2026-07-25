@@ -7,7 +7,7 @@ no separate state/observer module. Tk's own Variable mechanism already
 is the reactive layer this app needs.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import io
 import os

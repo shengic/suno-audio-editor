@@ -10,7 +10,7 @@ Pure functions, no Tk / no I/O beyond reading the file bytes in
 distinct concern with its own regex vocabulary.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import os
 import re

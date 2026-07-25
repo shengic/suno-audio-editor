@@ -8,7 +8,7 @@ tests headless-adjacent (no mainloop, no visible window).
 wave, cheap to build and enough to exercise slicing/callback logic.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import numpy as np
 import pytest

@@ -10,7 +10,7 @@ Fade in/out was removed per project owner request; the export is now a
 straight slice → re-encode.
 """
 
-__version__ = "2.0"
+__version__ = "2.1"
 
 import os
 import re
