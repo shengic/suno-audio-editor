@@ -34,6 +34,7 @@ SLIDER_LENGTH = 220
 ARTWORK_SIZE = 96
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac"}
 LYRIC_EXTS = {".srt", ".lrc"}
+BG_COLOR = "#E9D5FF"  # light purple for the app chrome (non-content areas)
 
 
 class App:
@@ -72,6 +73,7 @@ class App:
     def _build_ui(self):
         root = self.root
         root.columnconfigure(0, weight=1)
+        self._apply_theme()
 
         top = ttk.Frame(root, padding=8)
         top.grid(row=0, column=0, sticky="ew")
@@ -132,6 +134,16 @@ class App:
         )
         copyright_label.grid(row=6, column=0, sticky="ew")
 
+    def _apply_theme(self):
+        """Set the app chrome (root + all ttk container/label widgets)
+        to the light-purple BG_COLOR. Content widgets — tk.Text, Canvas,
+        the drop zone, the artwork label, and ttk.Entry — keep their
+        own explicit backgrounds and stay unaffected."""
+        self.root.configure(bg=BG_COLOR)
+        style = ttk.Style()
+        for name in ("TFrame", "TLabel", "TLabelframe", "TLabelframe.Label", "TCheckbutton"):
+            style.configure(name, background=BG_COLOR)
+
     def _build_import_panel(self, parent):
         panel = ttk.LabelFrame(parent, text="1. 匯入音訊", padding=8)
         panel.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
@@ -157,7 +169,7 @@ class App:
         self.drop_zone.grid(row=1, column=0, sticky="ew", pady=(8, 8))
         self.drop_zone.bind("<Button-1>", lambda e: self._on_browse_file())
 
-        artwork_frame = tk.Frame(panel, width=ARTWORK_SIZE, height=ARTWORK_SIZE)
+        artwork_frame = tk.Frame(panel, width=ARTWORK_SIZE, height=ARTWORK_SIZE, bg=BG_COLOR)
         artwork_frame.grid(row=1, column=1, sticky="e", padx=(8, 0), pady=(8, 8))
         artwork_frame.grid_propagate(False)  # tk.Label(width=..) is char-units; lock pixels here
         self.artwork_label = tk.Label(
