@@ -65,6 +65,9 @@ class App:
         self._build_ui()
         self._bind_shortcuts()
         self._register_global_dnd()
+        # Defer initial resize until after mainloop starts so widgets
+        # have their real requested sizes computed.
+        self.root.after(0, self._resize_to_fit)
         self._tick()
 
     # ---------- UI construction ----------
@@ -522,14 +525,24 @@ class App:
     # ---------- lyrics ----------
 
     def _show_lyrics_panel(self):
-        # Window size is fixed at whatever the user has it — never auto-
-        # resize on lyrics load. If the lyrics panel doesn't fit,
-        # the user can resize the window manually.
         self.lyrics_panel.grid()
+        self._resize_to_fit()
 
     def _hide_lyrics_panel(self):
         self.lyrics_panel.grid_remove()
         self._current_lyric_idx = -1
+        self._resize_to_fit()
+
+    def _resize_to_fit(self):
+        """Match window height to what the current content actually
+        needs, so nothing gets clipped below the visible area. Width is
+        preserved (respects user's horizontal resize)."""
+        self.root.update_idletasks()
+        req_h = self.root.winfo_reqheight()
+        current_w = self.root.winfo_width()
+        if current_w <= 1:
+            current_w = self.root.winfo_reqwidth() or 820
+        self.root.geometry(f"{current_w}x{req_h}")
 
     def _lyric_end(self, index: int) -> float:
         """End time for a lyric. LRC lines have no explicit end, so use
