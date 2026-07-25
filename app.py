@@ -65,9 +65,6 @@ class App:
         self._build_ui()
         self._bind_shortcuts()
         self._register_global_dnd()
-        # Defer initial resize until after mainloop starts so widgets
-        # have their real requested sizes computed.
-        self.root.after(0, self._resize_to_fit)
         self._tick()
 
     # ---------- UI construction ----------
@@ -205,6 +202,10 @@ class App:
             self.lyrics_panel, height=12, wrap="word", state="disabled",
             bg="#f9fafb", fg="#111827", relief="flat",
             font=("Segoe UI", 10),
+            # Override Tk's default selection style (blue bg + white fg)
+            # so selected lyric text stays readable in black.
+            selectbackground="#93c5fd", selectforeground="#111827",
+            inactiveselectbackground="#bfdbfe",
         )
         scroll = ttk.Scrollbar(
             self.lyrics_panel, orient="vertical", command=self.lyrics_text.yview
@@ -215,10 +216,14 @@ class App:
 
         # "region" tag tints lines whose start falls inside the current
         # waveform selection. "current" tag highlights the line being
-        # sung right now. Kept as separate tags so both can coexist.
-        self.lyrics_text.tag_configure("region", background="#dbeafe")
+        # sung right now. Explicit foreground on both so a bold or
+        # highlighted line never picks up a themed white fg.
         self.lyrics_text.tag_configure(
-            "current", background="#fde68a", font=("Segoe UI", 10, "bold")
+            "region", background="#dbeafe", foreground="#111827",
+        )
+        self.lyrics_text.tag_configure(
+            "current", background="#fde68a", foreground="#111827",
+            font=("Segoe UI", 10, "bold"),
         )
 
         # Bidirectional link: dragging a text selection here becomes
@@ -526,23 +531,10 @@ class App:
 
     def _show_lyrics_panel(self):
         self.lyrics_panel.grid()
-        self._resize_to_fit()
 
     def _hide_lyrics_panel(self):
         self.lyrics_panel.grid_remove()
         self._current_lyric_idx = -1
-        self._resize_to_fit()
-
-    def _resize_to_fit(self):
-        """Match window height to what the current content actually
-        needs, so nothing gets clipped below the visible area. Width is
-        preserved (respects user's horizontal resize)."""
-        self.root.update_idletasks()
-        req_h = self.root.winfo_reqheight()
-        current_w = self.root.winfo_width()
-        if current_w <= 1:
-            current_w = self.root.winfo_reqwidth() or 820
-        self.root.geometry(f"{current_w}x{req_h}")
 
     def _lyric_end(self, index: int) -> float:
         """End time for a lyric. LRC lines have no explicit end, so use

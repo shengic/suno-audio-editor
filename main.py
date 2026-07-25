@@ -19,7 +19,7 @@ from app import App
 def main():
     root = _RootClass()
     root.title("Suno 音訊剪輯工具")
-    root.geometry("820x540")
+    root.geometry("820x900")
     App(root, dnd_available=_DND_AVAILABLE)
     root.mainloop()
 
