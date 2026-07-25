@@ -20,6 +20,7 @@ from PIL import Image, ImageTk
 from audio_export import build_filename, export_clip
 from audio_loader import AudioClip, load_audio
 from audio_player import AudioPlayer
+from lyrics import Lyric, load_lyrics_file
 from waveform_view import WaveformView
 
 try:
@@ -31,6 +32,9 @@ POLL_MS = 50
 ZOOM_MAX_MULT = 20.0  # slider at 100% shows 1/20 of the fit-to-canvas width
 SLIDER_LENGTH = 220
 ARTWORK_SIZE = 96
+AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac"}
+LYRIC_EXTS = {".srt", ".lrc"}
+LYRICS_MIN_HEIGHT = 640  # window height needed when lyrics panel is showing
 
 
 class App:
@@ -44,6 +48,9 @@ class App:
         self.region = None  # (start, end) or None
         self._artwork_photo = None  # keep PhotoImage alive (Tk GC gotcha)
         self._fit_pps = 20.0  # recomputed on load / resize
+        self.lyrics: list[Lyric] | None = None
+        self._visible_lyric_indices: list[int] = []
+        self._current_lyric_idx: int = -1
 
         self.title_var = tk.StringVar(value="未載入音訊")
         self.url_var = tk.StringVar()
@@ -105,6 +112,7 @@ class App:
             command=self._on_volume_change, length=SLIDER_LENGTH,
         ).pack(side="left", padx=(4, 0))
 
+        self._build_lyrics_panel(root)
         self._build_transport_panel(root)
 
         footer = ttk.Label(
@@ -114,7 +122,7 @@ class App:
             padding=6,
             anchor="center",
         )
-        footer.grid(row=4, column=0, sticky="ew")
+        footer.grid(row=5, column=0, sticky="ew")
 
         copyright_label = ttk.Label(
             root,
@@ -123,7 +131,7 @@ class App:
             padding=4,
             anchor="center",
         )
-        copyright_label.grid(row=5, column=0, sticky="ew")
+        copyright_label.grid(row=6, column=0, sticky="ew")
 
     def _build_import_panel(self, parent):
         panel = ttk.LabelFrame(parent, text="1. 匯入音訊", padding=8)
@@ -184,9 +192,34 @@ class App:
             panel, text="清除選區 (Esc)", command=self._on_clear_region, takefocus=0
         ).grid(row=2, column=0, sticky="ew")
 
+    def _build_lyrics_panel(self, root):
+        self.lyrics_panel = ttk.LabelFrame(root, text="歌詞", padding=6)
+        self.lyrics_panel.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 8))
+        self.lyrics_panel.columnconfigure(0, weight=1)
+
+        self.lyrics_text = tk.Text(
+            self.lyrics_panel, height=6, wrap="word", state="disabled",
+            bg="#f9fafb", fg="#111827", relief="flat",
+            font=("Segoe UI", 10),
+        )
+        scroll = ttk.Scrollbar(
+            self.lyrics_panel, orient="vertical", command=self.lyrics_text.yview
+        )
+        self.lyrics_text.configure(yscrollcommand=scroll.set)
+        self.lyrics_text.grid(row=0, column=0, sticky="ew")
+        scroll.grid(row=0, column=1, sticky="ns")
+
+        # Tag used to highlight the currently-playing line during playback.
+        self.lyrics_text.tag_configure(
+            "current", background="#fde68a", font=("Segoe UI", 10, "bold")
+        )
+
+        # Hidden until a lyric file is loaded.
+        self.lyrics_panel.grid_remove()
+
     def _build_transport_panel(self, root):
         panel = ttk.Frame(root, padding=8)
-        panel.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 8))
+        panel.grid(row=4, column=0, sticky="ew", padx=8, pady=(0, 8))
 
         ttk.Button(panel, text="▶ 播放", command=self._on_play, takefocus=0, width=10).pack(
             side="left", padx=(0, 4)
@@ -266,8 +299,33 @@ class App:
 
     def _on_drop_file(self, event):
         path = event.data.strip("{}")
-        if path:
+        if not path:
+            return
+        ext = os.path.splitext(path)[1].lower()
+        if ext in AUDIO_EXTS:
             self._load_path(path)
+        elif ext in LYRIC_EXTS:
+            self._load_lyrics(path)
+        else:
+            self._set_status(f"不支援的檔案類型：{ext}（audio: {sorted(AUDIO_EXTS)}, lyrics: {sorted(LYRIC_EXTS)}）", "error")
+
+    def _load_lyrics(self, path):
+        try:
+            lyrics = load_lyrics_file(path)
+        except Exception as exc:
+            self._set_status(f"歌詞檔載入失敗: {exc}", "error")
+            return
+        if not lyrics:
+            self._set_status(f"歌詞檔內容為空或格式無法解析: {os.path.basename(path)}", "error")
+            return
+        self.lyrics = lyrics
+        name = os.path.basename(path)
+        if self.clip is None:
+            self._set_status(f"已載入歌詞 {name}（等待音訊）", "success")
+        else:
+            self._show_lyrics_panel()
+            self._refresh_lyrics_display()
+            self._set_status(f"已載入歌詞 {name}（{len(lyrics)} 行）", "success")
 
     def _on_load_url(self):
         url = self.url_var.get().strip()
@@ -292,6 +350,16 @@ class App:
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_loaded(self, clip: AudioClip):
+        # Lyrics are per-song. If new audio is loaded WITHOUT a pending
+        # lyrics-first drop, clear any lingering lyrics from the previous
+        # song. If lyrics were dropped before this audio (the "SRT then
+        # MP3" order option-c we agreed on), keep them and show the
+        # panel now.
+        had_pending_lyrics = self.lyrics is not None and self.clip is None
+        if not had_pending_lyrics:
+            self.lyrics = None
+            self._hide_lyrics_panel()
+
         self.clip = clip
         self.title_var.set(clip.title)
         self.player.load(clip)
@@ -300,6 +368,11 @@ class App:
         self._recompute_fit_pps()
         self._on_zoom_change(self.zoom_var.get())
         self._on_region_change(None)
+
+        if had_pending_lyrics:
+            self._show_lyrics_panel()
+            self._refresh_lyrics_display()
+
         self._set_status(f"已成功載入音訊: {clip.title}", "success")
 
     def _update_artwork(self, artwork_bytes):
@@ -324,11 +397,13 @@ class App:
             self.region_duration_var.set("")
             self.region_start_var.set("")
             self.region_end_var.set("")
-            return
-        start, end = region
-        self.region_duration_var.set(f"{end - start:.2f} 秒")
-        self.region_start_var.set(self._format_time(start))
-        self.region_end_var.set(self._format_time(end))
+        else:
+            start, end = region
+            self.region_duration_var.set(f"{end - start:.2f} 秒")
+            self.region_start_var.set(self._format_time(start))
+            self.region_end_var.set(self._format_time(end))
+        if self.lyrics is not None:
+            self._refresh_lyrics_display()
 
     def _on_clear_region(self):
         self.waveform.clear_region()
@@ -431,6 +506,80 @@ class App:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    # ---------- lyrics ----------
+
+    def _show_lyrics_panel(self):
+        self.lyrics_panel.grid()
+        # Grow the window if it's currently too short to show the panel
+        # without clipping the transport row. Never shrink an already-
+        # larger window (respect user resize).
+        self.root.update_idletasks()
+        if self.root.winfo_height() < LYRICS_MIN_HEIGHT:
+            self.root.geometry(f"{self.root.winfo_width()}x{LYRICS_MIN_HEIGHT}")
+
+    def _hide_lyrics_panel(self):
+        self.lyrics_panel.grid_remove()
+        self._visible_lyric_indices = []
+        self._current_lyric_idx = -1
+
+    def _refresh_lyrics_display(self):
+        """Rebuild the lyrics Text widget contents from self.lyrics,
+        filtered by the current region (or all of them if no region).
+        Records which original-lyric indices are visible so the tick
+        highlighter can map back."""
+        if self.lyrics is None:
+            return
+
+        if self.region is not None:
+            r_start, r_end = self.region
+            visible = [(i, l) for i, l in enumerate(self.lyrics) if r_start <= l.start <= r_end]
+        else:
+            visible = list(enumerate(self.lyrics))
+
+        self.lyrics_text.configure(state="normal")
+        self.lyrics_text.delete("1.0", "end")
+        self._visible_lyric_indices = []
+        for orig_idx, lyric in visible:
+            self._visible_lyric_indices.append(orig_idx)
+            ts = self._format_time(lyric.start)
+            self.lyrics_text.insert("end", f"[{ts}] {lyric.text}\n")
+        self.lyrics_text.configure(state="disabled")
+        self._current_lyric_idx = -1
+        self._update_current_lyric_highlight(self.player.get_time())
+
+    def _update_current_lyric_highlight(self, t: float):
+        """Move the 'current' tag to whichever visible lyric line is
+        active at time `t`. For LRC (Lyric.end is None), the implicit
+        end is the next lyric's start (or the track end)."""
+        if not self._visible_lyric_indices:
+            return
+
+        active_visible_idx = -1
+        for i, orig_idx in enumerate(self._visible_lyric_indices):
+            lyric = self.lyrics[orig_idx]
+            end = lyric.end
+            if end is None:
+                next_orig = orig_idx + 1
+                if next_orig < len(self.lyrics):
+                    end = self.lyrics[next_orig].start
+                elif self.clip is not None:
+                    end = self.clip.duration
+                else:
+                    end = lyric.start + 3600
+            if lyric.start <= t < end:
+                active_visible_idx = i
+                break
+
+        if active_visible_idx == self._current_lyric_idx:
+            return
+
+        self.lyrics_text.tag_remove("current", "1.0", "end")
+        if active_visible_idx >= 0:
+            line_no = active_visible_idx + 1  # Tk Text lines are 1-indexed
+            self.lyrics_text.tag_add("current", f"{line_no}.0", f"{line_no}.end+1c")
+            self.lyrics_text.see(f"{line_no}.0")
+        self._current_lyric_idx = active_visible_idx
+
     # ---------- status / polling ----------
 
     def _set_status(self, message, kind):
@@ -455,4 +604,6 @@ class App:
             t = self.player.get_time()
             self.waveform.set_playhead(t)
             self.time_var.set(f"{self._format_time(t)} / {self._format_time(self.clip.duration)}")
+            if self.lyrics is not None:
+                self._update_current_lyric_highlight(t)
         self.root.after(POLL_MS, self._tick)

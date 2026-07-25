@@ -9,6 +9,7 @@ A desktop app for trimming Suno-generated songs. Load a Suno share link or a loc
 ## Features
 
 - **Import** — Suno share link, CDN URL, bare UUID, or any local `mp3 / wav / m4a / ogg / aac` file. Drop files anywhere in the window.
+- **Lyrics** — drop a `.srt` or `.lrc` file (any order relative to the audio); lyrics inside the current selection are shown in a panel below the waveform, with the currently-playing line highlighted. No panel is shown if no lyric file is provided.
 - **Cover art & title** — auto-fetched from embedded ID3/MP4/FLAC tags for local files, or scraped from `suno.com/song/{id}` for Suno URLs.
 - **Waveform selection** — drag to create, drag edges to resize, drag interior to move. Peaks stay visible under the selection tint.
 - **Playback** — three explicit buttons (▶ 播放 / ⏸ 暫停 / ⏹ 停止), region preview, region loop, volume control.

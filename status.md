@@ -22,9 +22,16 @@ pytest -m network   # +1 opt-in network integration test
 
 ### Import
 - Paste a Suno share link (`suno.com/song/{uuid}`), a raw CDN mp3 URL (`cdn1.suno.ai/{uuid}.mp3`), a generic https audio URL, or a bare UUID.
-- Click the drop zone to browse, or **drop a file anywhere in the window** — the whole UI is a DND target (root + drop zone + URL entry all registered so `ttk.Entry`'s default "insert dropped path as text" behavior is overridden).
+- Click the drop zone to browse, or **drop a file anywhere in the window** — the whole UI is a DND target (root + drop zone + URL entry all registered so `ttk.Entry`'s default "insert dropped path as text" behavior is overridden). File type is dispatched by extension: `.mp3/.wav/.m4a/.ogg/.aac/.flac` → audio; `.srt/.lrc` → lyrics.
 - Cover art auto-fetched: local files via mutagen (ID3 APIC / MP4 covr / FLAC pictures); Suno URLs via `og:image` scraped from `suno.com/song/{id}`.
 - Song title auto-detected: local files use filename minus extension; Suno URLs use `og:title` (fallback to parser label if scrape fails).
+
+### Lyrics
+- Drop a `.srt` or `.lrc` file; either format supported (SRT has start+end times, LRC has start-only).
+- Drop order is flexible: lyrics before audio, lyrics after audio, or replace lyrics for the current audio all work. New audio resets pending lyrics.
+- The lyrics panel appears **only** when a lyric file is loaded — no empty placeholder.
+- Lines inside the current waveform selection are shown; with no selection, all lines are shown.
+- Currently-playing line is highlighted during playback (LRC end time inferred from next line's start).
 
 ### Waveform
 - Downsampled peaks drawn on a `tk.Canvas`, with a time ruler.
@@ -58,17 +65,18 @@ All shortcuts no-op when focus is in an Entry / Spinbox to avoid stealing typed 
 
 ## Architecture
 
-Seven single-responsibility modules. See [CLAUDE.md](CLAUDE.md) for the full breakdown.
+Eight single-responsibility modules. See [CLAUDE.md](CLAUDE.md) for the full breakdown.
 
 | File | Role |
 |---|---|
-| `main.py` | Entry point; picks `TkinterDnD.Tk` or falls back to `tk.Tk`; geometry `820x540` |
-| `app.py` | Composition root, UI, event wiring, poll loop |
+| `main.py` | Entry point; picks `TkinterDnD.Tk` or falls back to `tk.Tk`; geometry `820x540` (grows to 640 when lyrics panel is shown) |
+| `app.py` | Composition root, UI, event wiring, poll loop, DND dispatch (audio vs lyrics by extension) |
 | `suno_parser.py` | Pure URL/UUID → audio_url + title resolver |
 | `audio_loader.py` | `AudioClip` dataclass; decode via pydub/ffmpeg; extract cover art (mutagen + Suno og:image scrape) |
 | `audio_player.py` | Realtime playback via `sounddevice.OutputStream`; UI polls `get_time()`/`is_playing()` |
 | `audio_export.py` | Slice + re-encode |
 | `waveform_view.py` | `tk.Canvas` peaks + ruler + draggable region |
+| `lyrics.py` | SRT / LRC parsers + `Lyric` dataclass; UTF-8 BOM tolerant |
 
 ## Test suite
 
@@ -82,6 +90,7 @@ Seven single-responsibility modules. See [CLAUDE.md](CLAUDE.md) for the full bre
 | `test_audio_player.py` | 18 tests — `_callback` behavior (silence/advance/loop/stop-at-region-end), seek clamps, volume clamps, `clear_region_bound` doesn't touch `_playing` (feature-parity contract) |
 | `test_waveform_view.py` | 17 tests — static helpers + instance geometry under hidden Tk root |
 | `test_integration_network.py` | 1 test, `@pytest.mark.network` — end-to-end `load_audio` on a public MP3, opt-in |
+| `test_lyrics.py` | 16 tests — SRT (basic / dot ms sep / multiline / empty / CRLF), LRC (basic / metadata skip / multi-timestamp / no-ms / sorting / empty lines / cs vs ms), `load_lyrics_file` dispatch and UTF-8 BOM |
 
 ## v1 → v2 changelog
 
@@ -95,8 +104,9 @@ Seven single-responsibility modules. See [CLAUDE.md](CLAUDE.md) for the full bre
 - Cover art (local + Suno og:image scrape)
 - Real song title (local: filename minus ext; Suno: og:title scrape)
 - Global DND (drops anywhere in window, including URL entry)
+- SRT/LRC lyric-file support (auto-hidden panel when no lyric file loaded; region-scoped display; currently-playing line highlight)
 - Copyright footer
-- pytest suite (84 tests, network integration opt-in)
+- pytest suite (100 tests, network integration opt-in)
 - `audioop-lts` conditional dep for Python 3.13 (`pydub` still imports the removed stdlib module)
 
 **Fixed:**
