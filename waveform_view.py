@@ -78,6 +78,21 @@ class WaveformView(tk.Frame):
         if self.on_region_change:
             self.on_region_change(None)
 
+    def set_region(self, start: float, end: float) -> None:
+        """Programmatically set the selection region (e.g. from a
+        lyric-line selection). Clamps to clip bounds; no-ops if the
+        resulting span is below the min length or if no clip is loaded."""
+        if self._clip is None:
+            return
+        start = max(0.0, min(self._duration, float(start)))
+        end = max(0.0, min(self._duration, float(end)))
+        if end - start < MIN_REGION_SEC:
+            return
+        self._region = (start, end)
+        self._redraw_region()
+        if self.on_region_change:
+            self.on_region_change(self._region)
+
     def get_region(self):
         return self._region
 

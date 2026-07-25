@@ -34,7 +34,7 @@ SLIDER_LENGTH = 220
 ARTWORK_SIZE = 96
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac"}
 LYRIC_EXTS = {".srt", ".lrc"}
-LYRICS_MIN_HEIGHT = 640  # window height needed when lyrics panel is showing
+LYRICS_MIN_HEIGHT = 720  # window height needed when lyrics panel is showing (12 rows)
 
 
 class App:
@@ -49,8 +49,8 @@ class App:
         self._artwork_photo = None  # keep PhotoImage alive (Tk GC gotcha)
         self._fit_pps = 20.0  # recomputed on load / resize
         self.lyrics: list[Lyric] | None = None
-        self._visible_lyric_indices: list[int] = []
         self._current_lyric_idx: int = -1
+        self._syncing_from_lyric: bool = False  # re-entry guard for lyric→region sync
 
         self.title_var = tk.StringVar(value="未載入音訊")
         self.url_var = tk.StringVar()
@@ -193,12 +193,14 @@ class App:
         ).grid(row=2, column=0, sticky="ew")
 
     def _build_lyrics_panel(self, root):
-        self.lyrics_panel = ttk.LabelFrame(root, text="歌詞", padding=6)
+        self.lyrics_panel = ttk.LabelFrame(
+            root, text="歌詞（拖選以設定波形選區）", padding=6
+        )
         self.lyrics_panel.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 8))
         self.lyrics_panel.columnconfigure(0, weight=1)
 
         self.lyrics_text = tk.Text(
-            self.lyrics_panel, height=6, wrap="word", state="disabled",
+            self.lyrics_panel, height=12, wrap="word", state="disabled",
             bg="#f9fafb", fg="#111827", relief="flat",
             font=("Segoe UI", 10),
         )
@@ -209,10 +211,20 @@ class App:
         self.lyrics_text.grid(row=0, column=0, sticky="ew")
         scroll.grid(row=0, column=1, sticky="ns")
 
-        # Tag used to highlight the currently-playing line during playback.
+        # "region" tag tints lines whose start falls inside the current
+        # waveform selection. "current" tag highlights the line being
+        # sung right now. Kept as separate tags so both can coexist.
+        self.lyrics_text.tag_configure("region", background="#dbeafe")
         self.lyrics_text.tag_configure(
             "current", background="#fde68a", font=("Segoe UI", 10, "bold")
         )
+
+        # Bidirectional link: dragging a text selection here becomes
+        # the waveform selection. `<<Selection>>` fires on every
+        # selection change; the handler debounces via _syncing_from_lyric
+        # so the waveform's on_region_change echo doesn't rewrite the
+        # text and blow away the user's selection mid-drag.
+        self.lyrics_text.bind("<<Selection>>", self._on_lyric_selection)
 
         # Hidden until a lyric file is loaded.
         self.lyrics_panel.grid_remove()
@@ -402,8 +414,10 @@ class App:
             self.region_duration_var.set(f"{end - start:.2f} 秒")
             self.region_start_var.set(self._format_time(start))
             self.region_end_var.set(self._format_time(end))
+        # Only refresh region *highlight*, not the full text — a full
+        # refresh would clear any in-progress lyric selection.
         if self.lyrics is not None:
-            self._refresh_lyrics_display()
+            self._update_region_highlight()
 
     def _on_clear_region(self):
         self.waveform.clear_region()
@@ -519,66 +533,108 @@ class App:
 
     def _hide_lyrics_panel(self):
         self.lyrics_panel.grid_remove()
-        self._visible_lyric_indices = []
         self._current_lyric_idx = -1
 
+    def _lyric_end(self, index: int) -> float:
+        """End time for a lyric. LRC lines have no explicit end, so use
+        the next lyric's start (or the track end) as an implicit end."""
+        lyric = self.lyrics[index]
+        if lyric.end is not None:
+            return lyric.end
+        if index + 1 < len(self.lyrics):
+            return self.lyrics[index + 1].start
+        if self.clip is not None:
+            return self.clip.duration
+        return lyric.start + 3600
+
     def _refresh_lyrics_display(self):
-        """Rebuild the lyrics Text widget contents from self.lyrics,
-        filtered by the current region (or all of them if no region).
-        Records which original-lyric indices are visible so the tick
-        highlighter can map back."""
+        """Rebuild the lyrics Text widget contents. Shows ALL lyrics
+        (not filtered by region) so the user can freely select any
+        range; region membership is indicated via a background tag."""
         if self.lyrics is None:
             return
 
-        if self.region is not None:
-            r_start, r_end = self.region
-            visible = [(i, l) for i, l in enumerate(self.lyrics) if r_start <= l.start <= r_end]
-        else:
-            visible = list(enumerate(self.lyrics))
-
         self.lyrics_text.configure(state="normal")
         self.lyrics_text.delete("1.0", "end")
-        self._visible_lyric_indices = []
-        for orig_idx, lyric in visible:
-            self._visible_lyric_indices.append(orig_idx)
+        for lyric in self.lyrics:
             ts = self._format_time(lyric.start)
             self.lyrics_text.insert("end", f"[{ts}] {lyric.text}\n")
         self.lyrics_text.configure(state="disabled")
+
         self._current_lyric_idx = -1
+        self._update_region_highlight()
         self._update_current_lyric_highlight(self.player.get_time())
 
+    def _update_region_highlight(self):
+        """Apply the 'region' background tag to lines whose start time
+        falls in the current selection. Called from _on_region_change,
+        not per-tick."""
+        if self.lyrics is None:
+            return
+        self.lyrics_text.tag_remove("region", "1.0", "end")
+        if self.region is None:
+            return
+        r_start, r_end = self.region
+        for i, lyric in enumerate(self.lyrics):
+            if r_start <= lyric.start <= r_end:
+                line = i + 1
+                self.lyrics_text.tag_add("region", f"{line}.0", f"{line}.end+1c")
+
     def _update_current_lyric_highlight(self, t: float):
-        """Move the 'current' tag to whichever visible lyric line is
-        active at time `t`. For LRC (Lyric.end is None), the implicit
-        end is the next lyric's start (or the track end)."""
-        if not self._visible_lyric_indices:
+        """Move the 'current' tag to whichever lyric line is active at
+        time `t`. LRC end times inferred from next-line start."""
+        if not self.lyrics:
             return
 
-        active_visible_idx = -1
-        for i, orig_idx in enumerate(self._visible_lyric_indices):
-            lyric = self.lyrics[orig_idx]
-            end = lyric.end
-            if end is None:
-                next_orig = orig_idx + 1
-                if next_orig < len(self.lyrics):
-                    end = self.lyrics[next_orig].start
-                elif self.clip is not None:
-                    end = self.clip.duration
-                else:
-                    end = lyric.start + 3600
-            if lyric.start <= t < end:
-                active_visible_idx = i
+        active_idx = -1
+        for i in range(len(self.lyrics)):
+            if self.lyrics[i].start <= t < self._lyric_end(i):
+                active_idx = i
                 break
 
-        if active_visible_idx == self._current_lyric_idx:
+        if active_idx == self._current_lyric_idx:
             return
 
         self.lyrics_text.tag_remove("current", "1.0", "end")
-        if active_visible_idx >= 0:
-            line_no = active_visible_idx + 1  # Tk Text lines are 1-indexed
+        if active_idx >= 0:
+            line_no = active_idx + 1  # Tk Text lines are 1-indexed
             self.lyrics_text.tag_add("current", f"{line_no}.0", f"{line_no}.end+1c")
             self.lyrics_text.see(f"{line_no}.0")
-        self._current_lyric_idx = active_visible_idx
+        self._current_lyric_idx = active_idx
+
+    def _on_lyric_selection(self, _event):
+        """Translate a text selection in the lyrics widget into a
+        waveform region. First selected line's start → region start;
+        last selected line's end (or implicit end for LRC) → region end.
+        Guarded so the resulting on_region_change echo doesn't rewrite
+        the text and destroy the user's in-progress selection."""
+        if self.clip is None or not self.lyrics:
+            return
+        try:
+            sel_first = self.lyrics_text.index("sel.first")
+            sel_last = self.lyrics_text.index("sel.last")
+        except tk.TclError:
+            return  # no selection
+
+        start_line = int(sel_first.split(".")[0]) - 1
+        end_line = int(sel_last.split(".")[0]) - 1
+        # If selection ends at column 0 of a line, that line isn't
+        # actually included — exclude it, matching text-editor convention.
+        if int(sel_last.split(".")[1]) == 0 and end_line > start_line:
+            end_line -= 1
+
+        n = len(self.lyrics)
+        start_line = max(0, min(n - 1, start_line))
+        end_line = max(0, min(n - 1, end_line))
+
+        region_start = self.lyrics[start_line].start
+        region_end = self._lyric_end(end_line)
+
+        self._syncing_from_lyric = True
+        try:
+            self.waveform.set_region(region_start, region_end)
+        finally:
+            self._syncing_from_lyric = False
 
     # ---------- status / polling ----------
 

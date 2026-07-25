@@ -30,8 +30,8 @@ pytest -m network   # +1 opt-in network integration test
 - Drop a `.srt` or `.lrc` file; either format supported (SRT has start+end times, LRC has start-only).
 - Drop order is flexible: lyrics before audio, lyrics after audio, or replace lyrics for the current audio all work. New audio resets pending lyrics.
 - The lyrics panel appears **only** when a lyric file is loaded — no empty placeholder.
-- Lines inside the current waveform selection are shown; with no selection, all lines are shown.
-- Currently-playing line is highlighted during playback (LRC end time inferred from next line's start).
+- All lyrics are shown; lines whose start time falls inside the current waveform selection get a blue background tint; the currently-playing line is highlighted in yellow bold (LRC end time inferred from next line's start).
+- **Bidirectional selection**: dragging text in the lyrics panel programmatically sets the waveform region to `[first_line.start, last_line.end]` (LRC end inferred from next line). A re-entry guard prevents the resulting `on_region_change` from rewriting the text and blowing away the user's in-progress drag.
 
 ### Waveform
 - Downsampled peaks drawn on a `tk.Canvas`, with a time ruler.

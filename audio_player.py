@@ -56,6 +56,11 @@ class AudioPlayer:
             return
         with self._lock:
             self._region = None
+            # If a previous playthrough left _pos at (or past) the end,
+            # the next callback would see n=0 and immediately stop —
+            # visible bug: "click 播放 does nothing". Rewind to start.
+            if self._pos >= len(self._clip.samples):
+                self._pos = 0
         self._start_stream()
 
     def play_region(self, start: float, end: float, loop: bool = False) -> None:
@@ -94,6 +99,11 @@ class AudioPlayer:
             self._region = None
 
     def _start_stream(self) -> None:
+        # Set the playing flag BEFORE .start() so the very first
+        # callback invocation (which PortAudio can fire immediately on
+        # start) sees _playing=True and emits samples instead of
+        # silencing.
+        self._playing = True
         if self._stream is None:
             self._stream = sd.OutputStream(
                 samplerate=self._clip.sample_rate,
@@ -102,7 +112,6 @@ class AudioPlayer:
                 dtype="float32",
             )
             self._stream.start()
-        self._playing = True
 
     def _callback(self, outdata, frames, time_info, status):
         if not self._playing or self._clip is None:
